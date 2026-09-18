@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS stock_state (id INTEGER PRIMARY KEY, payload JSONB NOT NULL DEFAULT '{}'::jsonb)

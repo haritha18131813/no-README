@@ -1,0 +1,2 @@
+import { db } from "hatchable";
+export const access = "public"; export const methods=["GET","POST"]; export default async function(req,res){if(req.method==="GET"){const r=await db.query("SELECT payload FROM stock_state WHERE id=1");return res.json(r.rows[0]?r.rows[0].payload:{page:0,series:["A","B","C","D"],starting:{},stock:{A:[],B:[],C:[],D:[]},returns:{A:[],B:[],C:[],D:[]},bad:[]})}await db.query("INSERT INTO stock_state (id,payload) VALUES (1,$1) ON CONFLICT (id) DO UPDATE SET payload=$1",[req.body]);res.json({ok:true})}
