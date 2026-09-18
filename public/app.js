@@ -1,7 +1,7 @@
 const API="/api";
 let S={page:0,series:["A","B","C","D"],starting:{},stock:{A:[],B:[],C:[],D:[]},returns:{A:[],B:[],C:[],D:[]},bad:[],sessions:[],stockLog:[]};
 const $=x=>document.querySelector(x);
-const nums=x=>x.split(",").map(v=>Number(v.trim())).filter(Number.isInteger);
+const nums=x=>x.split(",").map(v=>Number(v.trim())).filter(v=>Number.isInteger(v)&&v>0);
 const fmt=a=>{if(!a||!a.length)return "—";let out=[],start=a[0],prev=a[0];for(let i=1;i<a.length;i++){if(a[i]===prev+1){prev=a[i]}else{out.push(start===prev?String(start):start+"–"+prev);start=prev=a[i]}}out.push(start===prev?String(start):start+"–"+prev);return out.join(", ")};
 const listNums=a=>a&&a.length?a.join(", "):"—";
 const key=(d,s)=>d+"_"+s;
@@ -32,7 +32,7 @@ let sess={key:k,date,session,allocation:a,returns:null};if(!S.sessions)S.session
 function loadAllocation(){let k=$("#allocLoad").value;if(!k)return;let x=(S.sessions||[]).find(s=>key(s.date,s.session)===k);if(x){S.allocation=x.allocation;render()}}
 function missing(){return "<div class=card><h2>Missing / Damaged Booklets</h2><p class=muted>Load a saved session. Every hall is shown with its allocated ranges. For each missing/damaged booklet, replacement is made to the same hall in this order: Old Stock → Returned Stock → Continuous stock from the next series.</p><div class=grid><div><label>Saved Date & Session</label><select id=mdLoad><option value=''>Select date & session</option>"+sessionOptions("")+"</select></div><button onclick=loadMissingForm()>Load Session</button></div></div><div id=missingForm></div><div class=card><h3>Missing / Damaged History</h3>"+S.bad.map(x=>"<span class=pill>"+x.date+" "+x.session+" · Hall "+x.hall+" · "+x.series+" "+x.number+" · "+x.reason+(x.replacement?" · Replaced by "+x.replacement.series+" "+x.replacement.number+" ("+x.replacement.source+")":" · Replacement pending")+"</span>").join("")+"</div>"}
 
-function nextSeries(q){let i=S.series.indexOf(q);return i>=0&&i<S.series.length-1?S.series[i+1]:null}
+function nextSeries(q){let i=S.series.indexOf(q);if(i<0)return null;for(let j=i+1;j<S.series.length;j++){let nq=S.series[j],x=Number(S.starting[nq]);if(Number.isInteger(x)&&x>0)return nq}return null}
 
 function removeFromHall(h,n){
   let source="";
@@ -56,8 +56,10 @@ function replaceMissing(sess,h,n){
     let x=S.returns[q].shift();h.returnedBooklets.push(x);h.returnedBooklets.sort((a,b)=>a-b);
     replacement={series:q,number:x,source:"Returned Stock"};
   }else{
-    let nq=nextSeries(q),x=Number(S.starting[nq]||0);
-    if(!nq||!x)return null;
+    let nq=nextSeries(q);
+    if(!nq)return null;
+    let x=Number(S.starting[nq]);
+    if(!Number.isInteger(x)||x<=0)return null;
     S.starting[nq]=x+1;
     if(!h.nextSeriesBooklets)h.nextSeriesBooklets={};
     h.nextSeriesBooklets[nq]=h.nextSeriesBooklets[nq]||[];
