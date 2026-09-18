@@ -30,7 +30,7 @@ S.stock[q]=old.slice(oi);S.returns[q]=ret.slice(ri);S.starting[q]=n;
 let a={date,session,registered:Number($("#ar").value),series:q,halls:out,oldUsed:oi,returnedUsed:ri,createdAt:new Date().toISOString()};
 let sess={key:k,date,session,allocation:a,returns:null};if(!S.sessions)S.sessions=[];S.sessions.push(sess);S.allocation=a;await save();render()}
 function loadAllocation(){let k=$("#allocLoad").value;if(!k)return;let x=(S.sessions||[]).find(s=>key(s.date,s.session)===k);if(x){S.allocation=x.allocation;render()}}
-function missing(){return "<div class=card><h2>Missing / Damaged Booklets</h2><p class=muted>Load a saved session. Every hall is shown with its allocated ranges. For each missing/damaged booklet, replacement is made to the same hall in this order: Old Stock → Returned Stock → Continuous stock from the next series.</p><div class=grid><div><label>Saved Date & Session</label><select id=mdLoad><option value=''>Select date & session</option>"+sessionOptions("")+"</select></div><button onclick=loadMissingForm()>Load Session</button></div></div><div id=missingForm></div><div class=card><h3>Missing / Damaged History</h3>"+S.bad.map(x=>"<span class=pill>"+x.date+" "+x.session+" · Hall "+x.hall+" · "+x.series+" "+x.number+" · "+x.reason+(x.replacement?" · Replaced by "+x.replacement.series+" "+x.replacement.number+" ("+x.replacement.source+")":" · Replacement pending")+"</span>").join("")+"</div>"}
+function missing(){return "<div class=card><h2>Missing / Damaged Booklets</h2><p class=muted>Load a saved session. Every hall is shown with its allocated ranges. For each missing/damaged booklet, replacement is made to the same hall and same series in this order: Old Stock → Returned Stock → next available Continuous number from the same series.</p><div class=grid><div><label>Saved Date & Session</label><select id=mdLoad><option value=''>Select date & session</option>"+sessionOptions("")+"</select></div><button onclick=loadMissingForm()>Load Session</button></div></div><div id=missingForm></div><div class=card><h3>Missing / Damaged History</h3>"+S.bad.map(x=>"<span class=pill>"+x.date+" "+x.session+" · Hall "+x.hall+" · "+x.series+" "+x.number+" · "+x.reason+(x.replacement?" · Replaced by "+x.replacement.series+" "+x.replacement.number+" ("+x.replacement.source+")":" · Replacement pending")+"</span>").join("")+"</div>"}
 
 function nextSeries(q){let i=S.series.indexOf(q);if(i<0)return null;for(let j=i+1;j<S.series.length;j++){let nq=S.series[j],x=Number(S.starting[nq]);if(Number.isInteger(x)&&x>0)return nq}return null}
 
@@ -56,16 +56,14 @@ function replaceMissing(sess,h,n){
     let x=S.returns[q].shift();h.returnedBooklets.push(x);h.returnedBooklets.sort((a,b)=>a-b);
     replacement={series:q,number:x,source:"Returned Stock"};
   }else{
-    let nq=nextSeries(q);
-    if(!nq)return null;
-    let x=Number(S.starting[nq]);
+    let x=Number(S.starting[q]);
     if(!Number.isInteger(x)||x<=0)return null;
-    S.starting[nq]=x+1;
+    S.starting[q]=x+1;
     if(!h.nextSeriesBooklets)h.nextSeriesBooklets={};
-    h.nextSeriesBooklets[nq]=h.nextSeriesBooklets[nq]||[];
-    h.nextSeriesBooklets[nq].push(x);
-    h.nextSeriesBooklets[nq].sort((a,b)=>a-b);
-    replacement={series:nq,number:x,source:"Continuous - Next Series"};
+    h.nextSeriesBooklets[q]=h.nextSeriesBooklets[q]||[];
+    h.nextSeriesBooklets[q].push(x);
+    h.nextSeriesBooklets[q].sort((a,b)=>a-b);
+    replacement={series:q,number:x,source:"Continuous - Same Series"};
   }
   h.booklets=h.booklets.filter(x=>x!==n);
   if(source==="old")h.oldBooklets=h.oldBooklets.filter(x=>x!==n);
@@ -80,7 +78,7 @@ function loadMissingForm(){
   let k=$("#mdLoad").value;if(!k)return alert("Select a saved session");
   let sess=(S.sessions||[]).find(x=>key(x.date,x.session)===k);if(!sess)return;
   let a=sess.allocation;
-  $("#missingForm").innerHTML="<div class=card><h3>"+a.date+" — "+a.session+" · Series "+a.series+"</h3><p class=muted>Each hall shows its current allocation. Enter one or more exact booklet numbers for each hall.</p><div id=mhalls>"+a.halls.map(h=>"<div class='card mhrow' data-hall='"+h.hall+"'><p><b>Hall "+h.hall+"</b> — "+h.count+" booklets</p><p><b>Old ("+h.oldCount+"):</b> "+listNums(h.oldBooklets)+"</p><p><b>Returned ("+h.returnedCount+"):</b> "+listNums(h.returnedBooklets)+"</p><p><b>Continuous ("+h.continuousCount+"):</b> "+fmt(h.continuousBooklets)+"</p>"+Object.entries(h.nextSeriesBooklets||{}).map(([q,ns])=>"<p><b>Continuous Next Series ("+q+") ("+ns.length+"):</b> "+fmt(ns)+" ("+ns.length+")</p>").join("")+"<label>Missing / Damaged Booklet Number(s)</label><input class=mb placeholder='e.g. 113505, 113506'><select class=mr><option>Missing</option><option>Damaged</option></select></div>").join("")+"</div><br><button onclick=saveMissing()>Save Missing / Damaged & Replace</button><div id=mm></div></div>";
+  $("#missingForm").innerHTML="<div class=card><h3>"+a.date+" — "+a.session+" · Series "+a.series+"</h3><p class=muted>Each hall shows its current allocation. Enter one or more exact booklet numbers for each hall.</p><div id=mhalls>"+a.halls.map(h=>"<div class='card mhrow' data-hall='"+h.hall+"'><p><b>Hall "+h.hall+"</b> — "+h.count+" booklets</p><p><b>Old ("+h.oldCount+"):</b> "+listNums(h.oldBooklets)+"</p><p><b>Returned ("+h.returnedCount+"):</b> "+listNums(h.returnedBooklets)+"</p><p><b>Continuous ("+h.continuousCount+"):</b> "+fmt(h.continuousBooklets)+"</p>"+Object.entries(h.nextSeriesBooklets||{}).map(([q,ns])=>"<p><b>Continuous Replacement ("+q+") ("+ns.length+"):</b> "+fmt(ns)+" ("+ns.length+")</p>").join("")+"<label>Missing / Damaged Booklet Number(s)</label><input class=mb placeholder='e.g. 113505, 113506'><select class=mr><option>Missing</option><option>Damaged</option></select></div>").join("")+"</div><br><button onclick=saveMissing()>Save Missing / Damaged & Replace</button><div id=mm></div></div>";
 }
 
 async function saveMissing(){
