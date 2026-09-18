@@ -1,0 +1,5 @@
+# Hatchable project manifest. This file marks the folder as a
+# Hatchable project and declares the services it uses.
+# Reference: https://hatchable.com/docs/developers/config
+name = "H's Stock Management"
+description = "Session-wise engineering exam booklet stock, allocation, returns, missing/damaged tracking, and Excel-ready reporting for A/B/C/D booklet series."
