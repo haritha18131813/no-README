@@ -77,11 +77,16 @@ function replaceMissing(sess,h,n){
   return {missing:n,missingSource:source,replacement};
 }
 
+function addMissingEntry(h){
+  let d=document.createElement("div");d.className="mdentry";
+  d.innerHTML="<div class=grid><div><label>Missing Booklet Number(s)</label><input class=mb placeholder='e.g. 113505, 113506'></div><div><label>Type</label><select class=mr><option>Missing</option><option>Damaged</option></select></div><button class=secondary onclick=this.parentElement.parentElement.remove()>Remove</button></div>";
+  h.appendChild(d);
+}
 function loadMissingForm(){
   let k=$("#mdLoad").value;if(!k)return alert("Select a saved session");
   let sess=(S.sessions||[]).find(x=>key(x.date,x.session)===k);if(!sess)return;
   let a=sess.allocation;
-  $("#missingForm").innerHTML="<div class=card><h3>"+a.date+" — "+a.session+" · Series "+a.series+"</h3><p class=muted>Each hall shows its current allocation. Enter one or more exact booklet numbers for each hall.</p><div id=mhalls>"+a.halls.map(h=>"<div class='card mhrow' data-hall='"+h.hall+"'><p><b>Hall "+h.hall+"</b> — "+h.count+" booklets</p><p><b>Old ("+h.oldCount+"):</b> "+listNums(h.oldBooklets)+"</p><p><b>Returned ("+h.returnedCount+"):</b> "+listNums(h.returnedBooklets)+"</p><p><b>Continuous ("+h.continuousCount+"):</b> "+fmt(h.continuousBooklets)+"</p>"+Object.entries(h.nextSeriesBooklets||{}).map(([q,ns])=>"<p><b>Continuous Replacement ("+q+") ("+ns.length+"):</b> "+fmt(ns)+" ("+ns.length+")</p>").join("")+"<label>Missing / Damaged Booklet Number(s)</label><input class=mb placeholder='e.g. 113505, 113506'><select class=mr><option>Missing</option><option>Damaged</option></select></div>").join("")+"</div><br><button onclick=saveMissing()>Save Missing / Damaged & Replace</button><div id=mm></div></div>";
+  $("#missingForm").innerHTML="<div class=card><h3>"+a.date+" — "+a.session+" · Series "+a.series+"</h3><p class=muted>Each hall can have separate Missing and Damaged entries. Add as many entries as needed.</p><div id=mhalls>"+a.halls.map(h=>"<div class='card mhrow' data-hall='"+h.hall+"'><p><b>Hall "+h.hall+"</b> — "+h.count+" booklets</p><p><b>Old ("+h.oldCount+"):</b> "+listNums(h.oldBooklets)+"</p><p><b>Returned ("+h.returnedCount+"):</b> "+listNums(h.returnedBooklets)+"</p><p><b>Continuous ("+h.continuousCount+"):</b> "+fmt(h.continuousBooklets)+"</p>"+Object.entries(h.nextSeriesBooklets||{}).map(([q,ns])=>"<p><b>Continuous Replacement ("+q+") ("+ns.length+"):</b> "+fmt(ns)+" ("+ns.length+")</p>").join("")+"<div class=mdentries><div class=mdentry><div class=grid><div><label>Booklet Number(s)</label><input class=mb placeholder='e.g. 113505, 113506'></div><div><label>Type</label><select class=mr><option>Missing</option><option>Damaged</option></select></div></div></div></div><button class=secondary onclick=addMissingEntry(this.previousElementSibling)>+ Add Another Entry</button></div>").join("")+"</div><br><button onclick=saveMissing()>Save Missing / Damaged & Replace</button><div id=mm></div></div>";
 }
 
 async function saveMissing(){
@@ -90,14 +95,17 @@ async function saveMissing(){
   let changes=[],errors=[];
   [...document.querySelectorAll(".mhrow")].forEach(row=>{
     let h=sess.allocation.halls.find(x=>x.hall===row.dataset.hall);
-    let ns=[...new Set(nums(row.querySelector(".mb").value||""))];
-    ns.forEach(n=>{
-      if(!h.booklets.includes(n)){errors.push("Hall "+h.hall+": "+n+" is not in the current allocation.");return}
-      if((S.bad||[]).some(x=>x.date===sess.date&&x.session===sess.session&&x.hall===h.hall&&x.number===n)){errors.push("Hall "+h.hall+": "+n+" is already recorded.");return}
-      let ch=replaceMissing(sess,h,n);
-      if(!ch){errors.push("Hall "+h.hall+": no replacement stock is available for "+n+".");return}
-      S.bad.push({date:sess.date,session:sess.session,hall:h.hall,series:sess.allocation.series,number:n,reason:row.querySelector(".mr").value,missingSource:ch.missingSource,replacement:ch.replacement});
-      changes.push({hall:h.hall,...ch});
+    [...row.querySelectorAll(".mdentry")].forEach(entry=>{
+      let reason=entry.querySelector(".mr").value;
+      let ns=[...new Set(nums(entry.querySelector(".mb").value||""))];
+      ns.forEach(n=>{
+        if(!h.booklets.includes(n)){errors.push("Hall "+h.hall+": "+n+" is not in the current allocation.");return}
+        if((S.bad||[]).some(x=>x.date===sess.date&&x.session===sess.session&&x.hall===h.hall&&x.number===n)){errors.push("Hall "+h.hall+": "+n+" is already recorded.");return}
+        let ch=replaceMissing(sess,h,n);
+        if(!ch){errors.push("Hall "+h.hall+": no replacement stock is available for "+n+".");return}
+        S.bad.push({date:sess.date,session:sess.session,hall:h.hall,series:sess.allocation.series,number:n,reason,missingSource:ch.missingSource,replacement:ch.replacement});
+        changes.push({hall:h.hall,...ch});
+      });
     });
   });
   if(errors.length){$("#mm").innerHTML="<p class=error>"+errors.join("<br>")+"</p>";return}
