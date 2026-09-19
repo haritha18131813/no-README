@@ -22,7 +22,28 @@ async function removeOldStock(){let x=$("#rsx").value,ns=[...new Set(nums($("#rs
 async function retAdd(){await addStock("returned")}
 function hallRows(halls){return (halls||[]).map(h=>"<div class='grid hall'><div><label>Hall</label><input class=hn value='"+h.hall+"'></div><div><label>Count</label><input class=hc type=number value='"+h.count+"'></div></div>").join("")}
 function allocation(){let saved=sessionList();return "<div class=card><h2>Exam Date, Session & Hall Allocation</h2><div class=grid><div><label>Date</label><input id=ad type=date></div><div><label>Session</label><select id=as><option>FN</option><option>AN</option></select></div><div><label>Total Registered</label><input id=ar type=number min=1 oninput=updateAllocationTally()></div><div><label>Series</label><select id=aq>"+S.series.map(x=>"<option>"+x+"</option>").join("")+"</select></div></div><hr><div id=halls></div><div id=allocationTally class=muted style='margin:12px 0'>Enter registered count and hall counts to check the tally.</div><button class=secondary onclick=addHall()>+ Add Hall</button><br><br><button id=saveAllocationBtn onclick=allocate()>Create & Save Allocation</button></div><div class=card><h3>Load Saved Session</h3>"+(saved.length?"<select id=allocLoad><option value=''>Select date & session</option>"+sessionOptions("")+"</select> <button class=secondary onclick=loadAllocation()>Load</button>":"<p class=muted>No saved sessions yet.</p>")+"</div>"+(S.allocation?"<div class=card><h3>Currently Loaded Allocation — "+S.allocation.date+" "+S.allocation.session+"</h3>"+allocationView(S.allocation)+"</div>":"")}
-function allocationView(a){return "<p><b>Registered:</b> "+(a.registered||0)+" · <b>Series:</b> "+a.series+" · <b>Old used:</b> "+(a.oldUsed||0)+" · <b>Returned used:</b> "+(a.returnedUsed||0)+"</p>"+a.halls.map(h=>"<div class=card><p><b>Hall "+h.hall+"</b> — "+h.count+" booklets</p><p><b>Old ("+h.oldCount+"):</b> "+listNums(h.oldBooklets)+"</p><p><b>Returned ("+h.returnedCount+"):</b> "+listNums(h.returnedBooklets)+"</p><p><b>Continuous ("+h.continuousCount+"):</b> "+fmt(h.continuousBooklets)+" ("+h.continuousCount+")</p></div>").join("")}
+function allocationView(a){return "<p><b>Registered:</b> "+(a.registered||0)+" · <b>Series:</b> "+a.series+" · <b>Old used:</b> "+(a.oldUsed||0)+" · <b>Returned used:</b> "+(a.returnedUsed||0)+"</p><button class=secondary onclick=deleteLoadedAllocation()>Delete This Allocation</button><p class=muted>Deleting this allocation removes its saved return and Missing/Damaged records and restores stock used by this allocation.</p>"+a.halls.map(h=>"<div class=card><p><b>Hall "+h.hall+"</b> — "+h.count+" booklets</p><p><b>Old ("+h.oldCount+"):</b> "+listNums(h.oldBooklets)+"</p><p><b>Returned ("+h.returnedCount+"):</b> "+listNums(h.returnedBooklets)+"</p><p><b>Continuous ("+h.continuousCount+"):</b> "+fmt(h.continuousBooklets)+" ("+h.continuousCount+")</p></div>").join("")}
+async function deleteLoadedAllocation(){
+  let a=S.allocation;
+  if(!a?.date||!a?.session)return alert("No allocation is currently loaded");
+  let k=key(a.date,a.session);
+  let sess=(S.sessions||[]).find(x=>key(x.date,x.session)===k);
+  if(!sess)return alert("Saved allocation not found");
+  if(!confirm("Delete allocation for "+a.date+" "+a.session+"? This will also remove its saved returns and Missing/Damaged records and restore the stock used by this allocation."))return;
+  let q=a.series;
+  let oldUsed=(a.halls||[]).flatMap(h=>h.oldBooklets||[]);
+  let returnedUsed=(a.halls||[]).flatMap(h=>h.returnedBooklets||[]);
+  S.stock[q]=[...new Set([...(S.stock[q]||[]),...oldUsed])].sort((x,y)=>x-y);
+  S.returns[q]=[...new Set([...(S.returns[q]||[]),...returnedUsed])];
+  S.bad=(S.bad||[]).filter(x=>!(x.date===a.date&&x.session===a.session));
+  S.sessions=(S.sessions||[]).filter(x=>key(x.date,x.session)!==k);
+  S.sessionReturns=null;
+  S.allocation=null;
+  await save();
+  render();
+  alert("Allocation "+a.date+" "+a.session+" deleted and allocated stock restored.");
+}
+
 function updateAllocationTally(){let registered=Number($("#ar")?.value||0),total=[...document.querySelectorAll(".hc")].reduce((n,x)=>n+Number(x.value||0),0),el=$("#allocationTally"),btn=$("#saveAllocationBtn");if(!el)return;let diff=registered-total;if(!registered){el.className="muted";el.innerHTML="Enter the Total Registered count.";if(btn)btn.disabled=true;return}if(diff===0){el.className="ok";el.innerHTML="<b>✓ Tally matched:</b> Hall total "+total+" = Registered "+registered;if(btn)btn.disabled=false}else{el.className=diff>0?"error":"error";el.innerHTML=diff>0?"<b>⚠ "+diff+" more booklet(s) required:</b> Hall total "+total+" / Registered "+registered:"<b>⚠ Hall allocation exceeds registered by "+Math.abs(diff)+" booklet(s):</b> Hall total "+total+" / Registered "+registered;if(btn)btn.disabled=true}}
 function addHall(){let d=document.createElement("div");d.className="grid hall";d.innerHTML="<div><label>Hall</label><input class=hn placeholder=103></div><div><label>Count</label><input class=hc type=number min=1 value=30 oninput=updateAllocationTally()></div>";$("#halls").appendChild(d);updateAllocationTally()}
 function fairTargets(total,available,capacities){let target=Math.min(total,available),out=capacities.map(()=>0);if(target<=0)return out;let base=Math.floor(target/capacities.length),extra=target%capacities.length;for(let i=0;i<capacities.length;i++)out[i]=Math.min(capacities[i],base);let left=target-out.reduce((a,b)=>a+b,0);while(left>0){let best=-1;for(let i=0;i<capacities.length;i++){if(out[i]<capacities[i]&&(best<0||out[i]<out[best]||(out[i]===out[best]&&capacities[i]-out[i]>capacities[best]-out[best])))best=i}if(best<0)break;out[best]++;left--}return out}
