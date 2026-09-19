@@ -140,7 +140,24 @@ async function saveMissing(){
 
 function returns(){let saved=sessionList();return "<div class=card><h2>Returned Booklets for this Session</h2><p class=muted>Select a saved session, then load it. The registered count is taken automatically from the saved allocation; only the absent count is entered manually.</p><div class=grid><div><label>Saved Date & Session</label><select id=retLoad onchange=showRegisteredCount()><option value=''>Select date & session</option>"+sessionOptions("")+"</select></div><div><label>Registered Count</label><input id=raReg type=number readonly placeholder='Select date & session'></div><div><label>Absent Count (manual)</label><input id=ra type=number min=0></div></div><br><button onclick=loadReturnForm()>Load Session</button></div><div id=returnForm></div>"+(S.sessionReturns?returnDetails(S.sessionReturns):"")}
 function showRegisteredCount(){let k=$("#retLoad")?.value;if(!k){$("#raReg").value="";return}let sess=(S.sessions||[]).find(x=>key(x.date,x.session)===k);$("#raReg").value=sess?.allocation?.registered??""}
-function returnDetails(r){return "<div class=card><h3>Saved Return Details — "+r.date+" "+r.session+"</h3><p><b>Total Registered:</b> "+r.registered+" · <b>Absent:</b> "+r.absent+"</p>"+r.rows.map(x=>"<div class=card><p><b>Hall "+x.hall+"</b> · Absent/Returned count: "+x.count+"</p><p><b>Booklet Range:</b> "+x.range+"</p><p><b>Returned Booklets:</b> "+listNums(x.booklets)+"</p></div>").join("")+"<br><button class=secondary onclick=deleteSavedReturns()>Delete Saved Returned Booklets</button><p class=muted>Use this if the returned booklet numbers were entered wrongly. It removes the saved return record and puts the session back into the state before returns were recorded.</p></div>"}
+function returnDetails(r){return "<div class=card><h3>Saved Return Details — "+r.date+" "+r.session+"</h3><p><b>Total Registered:</b> "+r.registered+" · <b>Absent:</b> "+r.absent+"</p>"+r.rows.map(x=>"<div class=card><p><b>Hall "+x.hall+"</b> · Absent/Returned count: "+x.count+"</p><p><b>Booklet Range:</b> "+x.range+"</p><p><b>Returned Booklets:</b> "+listNums(x.booklets)+"</p><button class=secondary onclick=deleteHallReturn('"+r.date+"','"+r.session+"','"+x.hall+"')>Delete This Hall Return</button></div>").join("")+"<br><button class=secondary onclick=deleteSavedReturns()>Delete All Saved Returned Booklets</button><p class=muted>Use the hall-wise delete if only one hall was entered wrongly. Delete All removes the complete saved return record.</p></div>"}
+async function deleteHallReturn(date,session,hall){
+  let sess=(S.sessions||[]).find(x=>key(x.date,x.session)===key(date,session));
+  if(!sess?.returns)return alert("No saved returned-booklet data found for this session");
+  let r=sess.returns,q=sess.allocation?.series,row=(r.rows||[]).find(x=>x.hall===hall);
+  if(!row)return alert("Saved return data for Hall "+hall+" was not found");
+  if(!confirm("Delete the saved returned-booklet data for Hall "+hall+"? You can re-enter this hall later."))return;
+  let remove=new Set(row.booklets||[]);
+  if(q)S.returns[q]=(S.returns[q]||[]).filter(n=>!remove.has(n));
+  r.rows=(r.rows||[]).filter(x=>x.hall!==hall);
+  r.absent=r.rows.reduce((n,x)=>n+Number(x.count||0),0);
+  r.createdAt=new Date().toISOString();
+  sess.returns=r;
+  S.sessionReturns=r;
+  await save();
+  render();
+  alert("Hall "+hall+" return data deleted. You can re-enter it from the same session.");
+}
 async function deleteSavedReturns(){
   let k=$("#retLoad")?.value;
   if(!k)return alert("Select the saved date & session first");
